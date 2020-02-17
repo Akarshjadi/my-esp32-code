@@ -12,11 +12,6 @@
 extern "C" {
 #endif
 
-#define PARAM_NAMESPACE "esp32_nat"
-
-esp_err_t get_config_param_int(char* name, int* param);
-esp_err_t get_config_param_str(char* name, char** param);
-
 // Register router functions
 void register_router(void);
 
