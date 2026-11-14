@@ -440,14 +440,15 @@ int deauth(const char *mac_str, int frames)
         printf("Refused: %s is this device's own AP.\n", mac_str);
         return -1;
     }
-    /* Real deauth injection needs a separate raw-injection radio
-     * (monitor + injection) which conflicts with the running AP/STA.
-     * This build keeps the NAT router running, so deauth is a scaffold:
-     * it validates the target and reports that injection is not wired
-     * into this APSTA build. Add a dedicated monitor NIC to transmit. */
+    /* Deauth via esp_wifi_80211_tx() is possible in APSTA mode without
+     * monitor mode or a second radio (ESP32 Marauder proves this).
+     * The hard constraint is single-channel: the radio must be on the same
+     * channel as the target, so it cannot simultaneously serve our AP.
+     * Wiring injection into this build would require dropping to that channel
+     * — a disruptive trade-off the project has chosen not to make yet. */
     printf("deauth target ");
     print_mac(target);
-    printf(" x%d — scaffold only in this APSTA build; no packets sent.\n", frames);
+    printf(" x%d — scaffold only; injection via esp_wifi_80211_tx() is\n         feasible but requires tying the radio to the target channel,\n         which disrupts the running AP. Not wired into this build.\n", frames);
     return 0;
 #endif
 }
@@ -487,7 +488,7 @@ int beacon_flood(const char *mac_str, int frames)
     }
     printf("beacon flood target ");
     print_mac(target);
-    printf(" x%d — scaffold only in this APSTA build; no packets sent.\n", frames);
+    printf(" x%d — scaffold only; injection via esp_wifi_80211_tx() is\n         feasible but requires tying the radio to the target channel,\n         which disrupts the running AP. Not wired into this build.\n", frames);
     return 0;
 #endif
 }
