@@ -29,6 +29,7 @@
 #include "lwip/sys.h"
 
 #include "cmd_decl.h"
+#include "cmd_wifi.h"
 #include <esp_http_server.h>
 #include "driver/gpio.h"
 #include "lwip/dns.h"
@@ -479,6 +480,18 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STACONNECTED)
     {
         ESP_LOGI(TAG, "Station connected");
+    }
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_START)
+    {
+        uint8_t ap_mac[6];
+        if (esp_wifi_get_mac(WIFI_IF_AP, ap_mac) == ESP_OK)
+        {
+            extern void wifi_set_own_ap_mac(const uint8_t mac[6]);
+            wifi_set_own_ap_mac(ap_mac);
+            ESP_LOGI(TAG, "Own AP BSSID: %02x:%02x:%02x:%02x:%02x:%02x",
+                     ap_mac[0], ap_mac[1], ap_mac[2],
+                     ap_mac[3], ap_mac[4], ap_mac[5]);
+        }
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STADISCONNECTED)
     {

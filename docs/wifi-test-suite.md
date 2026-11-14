@@ -3,6 +3,9 @@
 Adds Marauder‑style Wi‑Fi testing to the ESP32 NAT Router, driven through the
 existing **serial console** and **web UI** on a display‑less ESP32.
 
+> **BLE:** Not covered here. See [`docs/ble-lab.md`](ble-lab.md) for the
+> recommended external tools and why this repo doesn't vendor BLE attack code.
+
 > **Legal.** Passive commands are read‑only and safe. The active (transmit)
 > commands — `deauth`, `beacon` — are **compile‑gated** (off by default) and
 > require a runtime `authorize` before they act. They are scaffolds in this

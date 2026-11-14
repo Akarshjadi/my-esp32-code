@@ -31,6 +31,7 @@
 #include "lwip/ip4_addr.h"
 
 #include "cmd_wifi.h"
+#include "lab_allowlist.h"
 
 static const char *TAG = "cmd_wifi";
 
@@ -47,6 +48,14 @@ static const char *TAG = "cmd_wifi";
 /* Authorization gate for active features                              */
 /* ------------------------------------------------------------------ */
 static volatile bool s_authorized = false;
+
+/* Own soft-AP BSSID — populated after AP starts. Used for the self-target guard. */
+static uint8_t s_own_ap_mac[6] = {0};
+
+void wifi_set_own_ap_mac(const uint8_t mac[6])
+{
+    memcpy(s_own_ap_mac, mac, 6);
+}
 
 void wifi_set_authorized(bool authorized)
 {
@@ -417,6 +426,20 @@ int deauth(const char *mac_str, int frames)
         printf("Bad target BSSID '%s'\n", mac_str);
         return -1;
     }
+    /* I2: allow-list gate — fail closed if list is empty or target absent */
+    if (!lab_allowlist_contains(target))
+    {
+        printf("Refused: %s is not in lab_allowlist. Add it with:\n", mac_str);
+        printf("  lab_allow add %s\n", mac_str);
+        printf("Only add MACs you own or have written authorization to test.\n");
+        return -1;
+    }
+    /* Self-target guard: refuse to deauth/beacon our own AP. */
+    if (memcmp(target, s_own_ap_mac, 6) == 0)
+    {
+        printf("Refused: %s is this device's own AP.\n", mac_str);
+        return -1;
+    }
     /* Real deauth injection needs a separate raw-injection radio
      * (monitor + injection) which conflicts with the running AP/STA.
      * This build keeps the NAT router running, so deauth is a scaffold:
@@ -446,6 +469,20 @@ int beacon_flood(const char *mac_str, int frames)
     if (parse_mac(mac_str, target) != 0)
     {
         printf("Bad target BSSID '%s'\n", mac_str);
+        return -1;
+    }
+    /* I2: allow-list gate */
+    if (!lab_allowlist_contains(target))
+    {
+        printf("Refused: %s is not in lab_allowlist. Add it with:\n", mac_str);
+        printf("  lab_allow add %s\n", mac_str);
+        printf("Only add MACs you own or have written authorization to test.\n");
+        return -1;
+    }
+    /* Self-target guard. */
+    if (memcmp(target, s_own_ap_mac, 6) == 0)
+    {
+        printf("Refused: %s is this device's own AP.\n", mac_str);
         return -1;
     }
     printf("beacon flood target ");
@@ -574,6 +611,7 @@ void register_wifi(void)
     ESP_ERROR_CHECK(esp_console_cmd_register(&deauth_cmd_r));
     ESP_ERROR_CHECK(esp_console_cmd_register(&beacon_cmd_r));
     ESP_ERROR_CHECK(esp_console_cmd_register(&stat_cmd_r));
+    register_lab_allowlist();   /* I2: lab_allow command for allow-list management */
     ESP_LOGI(TAG, "Wi-Fi test commands registered (passive on, active %s)",
 #if CONFIG_WIFI_ATTACKS_ENABLED
              "compiled in but unauthorized"

@@ -17,6 +17,10 @@ extern "C"
 
 #define PARAM_NAMESPACE "esp32_nat"
 
+/* NVS key: "lab_allowlist" — comma-separated MACs the operator has declared
+ * they own. Active commands refuse any BSSID not present here.
+ * Example value: "aa:bb:cc:dd:ee:ff,11:22:33:44:55:66" */
+#define PARAM_LAB_ALLOWLIST "lab_allowlist"
 
 
 #define PROTO_TCP 6

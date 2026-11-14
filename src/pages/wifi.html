@@ -16,10 +16,12 @@
             <h1>Wi-Fi Test Suite</h1>
         </div>
         <div class="alert alert-light mt-2 text-center" role=alert>
-            <p class="mb-1">Passive AP scan. Results auto-refresh every 30s.
-            Use the serial console for station discovery and active tools.</p>
-            <p class="mb-0 text-danger small">Active (transmit) features are compile-gated and
-            must only be used on networks you own or have written authorization to test.</p>
+            <p class="mb-0">Passive AP scan. Results auto-refresh every 30s.</p>
+            <p class="mb-0 text-danger small">
+            Active (transmit) features are compile-gated and console-only.
+            Run <code>authorize</code> at the serial prompt to enable them.
+            See <a href="/about">about</a> for the authorization policy.
+            </p>
         </div>
         <table class="table table-striped" id=wifi_table>
             <thead class="text-center fw-bold">
