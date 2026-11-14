@@ -4,7 +4,7 @@
 static const char *TAG = "AboutHandler";
 
 #ifdef LAB_MODE
-#define LAB_BANNER "<tr>\n                        <td colspan=\"2\" class=\"text-center\">\n                            <div class=\"alert alert-warning mt-2\">\n                                <strong>Lab build active.</strong>\n                                Active Wi-Fi commands require: (1) <code>lab_allow add &lt;mac&gt;</code>\n                                for each target you own, then (2) <code>authorize</code> at the serial prompt.\n                                See <a href=\"/wifi\">Wi‑Fi Test Suite</a> for details.\n                            </div>\n                        </td>\n                    </tr>"
+#define LAB_BANNER "<tr>\n                        <td colspan=\"2\" class=\"text-center\">\n                            <div class=\"alert alert-warning mt-2\">\n                                <strong>Lab build active.</strong>\n                                Active commands are wired (deauth/beacon via esp_wifi_80211_tx).\n                                Requires: (1) <code>lab_allow add &lt;mac&gt;</code> for each target you own,\n                                then (2) <code>authorize</code> at the serial prompt.\n                                See <a href=\"/wifi\">Wi‑Fi Test Suite</a> for details.\n                            </div>\n                        </td>\n                    </tr>"
 #else
 #define LAB_BANNER ""
 #endif
