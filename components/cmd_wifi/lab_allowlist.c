@@ -13,6 +13,7 @@
 #include "router_globals.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "esp_console.h"
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
