@@ -1,6 +1,7 @@
-# ESP32 Board — Complete In/Out Reference
+# ESP32 Board — Hardware Context
 
-Live-captured from the flashed board on 2026-11-24.
+Project-agnostic board facts. Use as the hardware section of any new
+project's context so you know what you're building for.
 
 ## Chip
 
@@ -8,166 +9,143 @@ Live-captured from the flashed board on 2026-11-24.
 |-------|-------|
 | Model | ESP32-D0WD-V3 |
 | Chip revision | v3.1 (supported up to v3.99) |
-| Dual-core Xtensa LX6 | 240 MHz (both cores running) |
-| Wi-Fi | 802.11 b/g/n (2.4 GHz, PHY bgn) |
+| CPU | Dual-core Xtensa LX6 @ 240 MHz |
+| Wi-Fi | 802.11 b/g/n, 2.4 GHz, PHY bgn |
 | Bluetooth | Yes (BT controller present) |
-| Flash | 4 MB, generic SPI, QIO mode, 80 MHz |
-| RAM | ~320 KB DRAM + ~30 KB IRAM |
+| Flash | 4 MB, generic SPI, QIO mode, 80 MHz clock |
+| DRAM | ~156 KB @ 0x3FFB8F08 |
+| IRAM | ~141 KB (14 KB D/IRAM + 111 KB @ 0x3FFE4350 + 30 KB @ 0x4009879C) |
 
 ## MAC Addresses
 
+The ESP32 has two built-in MAC addresses (factory-programmed, offset by 1):
+
 | Interface | MAC |
 |-----------|-----|
-| STA (uplink) | 20:50:0d:08:59:9c |
-| AP (downlink / softAP) | 20:50:0d:08:59:9d |
+| STA (station / uplink) | 20:50:0d:08:59:9c |
+| softAP (access point / downlink) | 20:50:0d:08:59:9d |
 
-Note: the ESP32 uses two MAC addresses (B0 + offset). STA is `...9c`, softAP is `...9d`.
+## GPIO Map
 
-## Flash Partition Layout (4 MB)
+| GPIO | Function | Notes |
+|------|----------|-------|
+| GPIO 0 | Boot mode (IO0) | Low at reset = bootloader mode |
+| GPIO 1 | UART0 TX | Console output, 115200 8N1 |
+| GPIO 2 | UART0 RX / on-board LED | Depends on board breakout |
+| GPIO 3 | UART0 RX | Console input |
+| GPIO 4 | SPI0 CS0 | Flash CS |
+| GPIO 5 | SPI0 MISO | Flash MISO |
+| GPIO 6 | SPI0 MOSI | Flash MOSI |
+| GPIO 7 | SPI0 CLK | Flash CLK |
+| GPIO 8 | SPI0 Q (D2) | Flash D2 (QIO/QSPI) |
+| GPIO 9 | SPI0 D (D3) | Flash D3 (QIO/QSPI) |
+| GPIO 10 | SPI0 HD | Flash high-speed (QSPI) |
+| GPIO 11 | SPI0 CS1 | Flash CS1 (dual CS) |
+| GPIO 12 | MTDO / SPI1 Q | JTAG MTDO |
+| GPIO 13 | MTCK / SPI1 D | JTAG MTCK |
+| GPIO 14 | SPI2 CS0 | |
+| GPIO 15 | SPI2 Q | |
+| GPIO 16 | SPI2 SCCLK / EN | Also the reset enable pin |
+| GPIO 17 | SPI2 MISO | |
+| GPIO 18 | SPI2 MOSI | |
+| GPIO 19 | SPI2 D2 | |
+| GPIO 20 | SPI2 D3 | |
+| GPIO 21 | UART1 TX | |
+| GPIO 22 | UART1 RX | |
+| GPIO 23 | RESET button | On ESP32-C3: GPIO 18 |
+| GPIO 25-32 | General purpose | Free for user projects |
+| GPIO 33-39 | ADC / general | |
 
-Written by `partitions.bin` (larger.csv):
+## Flash Partition Table (4 MB, larger.csv)
 
 | # | Name | Type | SubType | Offset | Size |
 |---|------|------|---------|--------|------|
-| 0 | nvs | data | nvs | 0x09000 | 0x5000 (32 KB) |
-| 1 | otadata | data | ota | 0x0E000 | 0x2000 (8 KB) |
+| 0 | nvs | data | nvs | 0x09000 | 32 KB |
+| 1 | otadata | data | ota | 0x0E000 | 8 KB |
 | 2 | ota_0 | app | ota_0 | 0x10000 | 1500 KB |
 | 3 | ota_1 | app | ota_1 | 0x187000 | 1500 KB |
 
-Bootloader:
-- 1st stage → 0x0000 (3 KB stub)
-- 2nd stage → 0x1000 (23 KB, ESP-IDF 5.1.2)
-- App firmware → 0x10000 (1.37 MB, project `esp32_nat_router_extended`)
+- 1st stage bootloader: 0x0000 (3 KB)
+- 2nd stage bootloader: 0x1000 (23 KB)
+- App firmware: 0x10000 (OTA slot 0)
 
-## Bootloader / Firmware
-
-| Field | Value |
-|-------|-------|
-| ESP-IDF version | 5.1.2 |
-| Project name | esp32_nat_router_extended |
-| App version | DEV-VERSION |
-| Compile time | Nov 24 2026 21:13:33 |
-| ELF SHA256 | 0135a65eb80c6e60… |
-| WiFi firmware | 91b9630 |
-| WiFi certification | v7.0 |
-
-## UART / Serial Console
+## Serial / USB
 
 | Pin | Function |
 |-----|----------|
-| GPIO 1 (TX0) | Console output (115200 8N1) |
-| GPIO 3 (RX0) | Console input |
+| GPIO 1 (TX0) | Console UART output, 115200 8N1 |
+| GPIO 3 (RX0) | Console UART input |
 
-- Baud: 115200, 8N1
-- Terminal in **dumb mode** (escape-sequence probe failed on the USB-serial cable)
-- Prompt: `esp32nre> `
-- Commands available: `set_sta`, `set_ap`, `set_ap_ip`, `set_sta_static`, `set_sta_ent`, `show`, `portmap`, `lab_allow`, `help`
-- **Known issue:** the USB-serial bridge (port `/dev/cu.usbserial-1110`) is unreliable for sending console commands — only 1-2 characters of a long command arrive. Use the **web interface** instead.
-
-### USB-Serial Bridge
-
-- Device: `/dev/cu.usbserial-1110` (was `2110` on earlier sessions)
-- Bootloader mode: hold **EN** low, **IO0** low, pulse **EN** → "waiting for download"
+- USB-serial bridge port (macOS): `/dev/cu.usbserial-1110`
+- **Known issue:** the USB-serial RX path is unreliable — long console
+  commands get truncated. Use a proper USB-serial adapter or the web/OTA interface.
+- Bootloader mode: hold IO0 (GPIO0) low, pulse EN (GPIO16) → "waiting for download"
 - `esptool` works reliably in bootloader mode (writes verified by hash)
 
-## Network Configuration (current, live)
-
-### Uplink (STA)
+## Bootloader
 
 | Field | Value |
 |-------|-------|
-| SSID | `Airtel_My Name is patric jane` |
-| Security | WPA2-PSK |
-| Channel | 4 (2.4 GHz) |
-| RSSI at boot | **-85 dBm** (weak — move antenna) |
-| DHCP | Client (no static IP configured) |
-| Status | Associating / running, no IP yet in last capture |
+| 1st stage | ets Jul 29 2019 12:21:46 (pre-programmed ROM) |
+| 2nd stage | ESP-IDF (compiled with the firmware) |
+| Flash mode | DIO @ 40 MHz (bootloader) / QIO @ 80 MHz (app) |
+| OTA | Enabled (ota_0 + ota_1, otadata at 0x0E000) |
 
-### Downlink (softAP)
+## Wi-Fi (hardware capability)
 
-| Field | Value |
-|-------|-------|
-| SSID | `toddler` (default) |
-| Password | `havemebaby` (default, 8 chars) |
-| BSSID | 20:50:0d:08:59:9d |
-| IP | 192.168.4.1 |
-| Subnet | 192.168.4.0/24 |
-| DHCP server | Enabled (WIFI_AP_DEF) |
-| DNS server | Enabled, port 53 |
+- 2.4 GHz only (no 5 GHz)
+- Modes: STA, softAP, STA+softAP (concurrent)
+- Security: WPA2-PSK, WPA2-Enterprise, open
+- Max concurrent connections: 10 (ESP-NOW encrypt constraint)
+- TX power: up to 84 (0.5 dB steps, ~20 dBm max)
 
-### NAT
+## Reset / Boot Pins
 
-- **Enabled** (IP_NAPT on AP subnet → uplink)
-- Web server on port **8080**
-- Console on UART0
+| Signal | GPIO | Behavior |
+|--------|------|----------|
+| EN | GPIO 16 | Low = reset. Pulse to restart. |
+| IO0 | GPIO 0 | Low at EN-falling-edge = bootloader mode |
 
-## GPIO Usage
+## Power
 
-| GPIO | Function |
-|------|----------|
-| GPIO 2 | On-board LED (status blink) |
-| GPIO 1 | UART TX (console out) |
-| GPIO 3 | UART RX (console in) |
-| GPIO 23 | RESET button (ESP32) / GPIO 18 on ESP32-C3 |
-| GPIO 0 | Boot mode (low at reset = bootloader) |
-| GPIO 16 | EN (reset) |
+| Rail | Typical |
+|------|---------|
+| VCC | 3.3 V (USB 5 V via onboard LDO) |
+| Peak current (Wi-Fi TX) | ~300 mA |
+| Idle | ~80 mA |
 
-## Console Commands (full list)
+## JTAG / Debug
 
-| Command | Description |
-|---------|-------------|
-| `help` | List all commands |
-| `set_sta <ssid> <pass>` | Set uplink WiFi credentials (NVS) |
-| `set_ap <ssid> <pass>` | Set downlink AP credentials (NVS) |
-| `set_ap_ip <ip>` | Set AP IP address |
-| `set_sta_static <ip> <mask> <gw>` | Static uplink IP |
-| `set_sta_ent <ssid> <id> <user> <pass>` | WPA2 Enterprise uplink |
-| `show` | Show current config |
-| `portmap` | Show port-mapping table |
-| `lab_allow add|remove|list|clear` | Manage BSSID allow-list for active Wi-Fi commands |
+- GPIO 12 (MTDO), GPIO 13 (MTCK) — JTAG on ESP32
+- OpenOCD / GDB: `toolchain-esp32` in PlatformIO
+- `esp-idf` debug: `idf.py debug-server` + `openocd`
 
-## Web Endpoints
+## RAM Layout
 
-| Method | URL | Purpose |
-|--------|-----|---------|
-| GET | `http://192.168.4.1:8080/` | Config page |
-| POST | `http://192.168.4.1:8080/apply` | Apply config (params: `func=config`, `ssid`, `password`, `ap_ssid`, `ap_password`, `ap_ip`, …) → auto-restart in 1 s |
-| GET | `http://192.168.4.1:8080/api` | JSON: `{"clients": N, "strength": -85, "text": "danger"}` |
-| GET | `http://192.168.4.1:8080/scan` | WiFi scan results |
-| GET | `http://192.168.4.1:8080/reset` | Factory reset |
-| POST | `http://192.168.4.1:8080/lock` | Lock web config |
-| POST | `http://192.168.4.1:8080/unlock` | Unlock web config |
+| Region | Start | Size | Purpose |
+|--------|-------|------|---------|
+| D/IRAM | 0x3FFAE6E0 | 6 KB | Stack / small heap |
+| DRAM | 0x3FFB8F08 | 156 KB | Main heap |
+| D/IRAM | 0x3FFE0440 | 14 KB | D/IRAM (dual access) |
+| D/IRAM | 0x3FFE4350 | 111 KB | D/IRAM (dual access) |
+| IRAM | 0x4009879C | 30 KB | IRAM (code + data) |
 
-## RSSI / Signal Strength
+## NVS (Non-Volatile Storage)
 
-The firmware exposes uplink RSSI via:
-- `GET /api` → `"strength"` field (integer dBm, 0 = not connected)
-- Config page → "(signal strength: -85 db)" text
+- Partition: `nvs` at 0x09000, 32 KB
+- Use a project-specific namespace to avoid collisions with other firmware
 
-Use `repeater.sh --graph-only` to poll this into a live graph with a
-**-70 dB antenna-placement threshold** line.
+## New-Project Checklist
 
-## Boot Log (excerpt)
+When starting a new project on this board, verify:
 
-```
-I (503) cpu_start: cpu freq: 240000000 Hz
-I (531) cpu_start: ESP-IDF: 5.1.2
-I (546) cpu_start: Chip rev: v3.1
-I (590) spi_flash: detected chip: generic
-I (2853) wifi:mode : sta (20:50:0d:08:59:9c) + softAP (20:50:0d:08:59:9d)
-I (2933) esp_netif_lwip: DHCP server started on interface WIFI_AP_DEF with IP: 192.168.4.1
-I (2933) ESP32NRE: connect to ap SSID: Airtel_My Name is patric jane
-I (2963) ESP32NRE: NAT is enabled
-I (3013) HTTPServer: Starting server on port: '8080'
-I (3213) wifi:security: WPA2-PSK, phy: bgn, rssi: -85
-```
-
-## Known Issues
-
-1. **Weak uplink signal (-85 dBm)** — move the antenna / ESP32 closer to the
-   router. The -70 dB threshold in `graph.html` is your target.
-2. **STA disconnects occasionally** (reason codes 2, 15, 201, 205 seen in
-   logs) — firmware auto-reconnects, but at -85 dBm the link is marginal.
-3. **Watchdog resets** — `task_wdt` fires on CPU0 during console interaction
-   when the serial link is unreliable. Not a firmware bug, a serial-link issue.
-4. **USB-serial RX unreliable** — use the web interface for all configuration.
+1. **Flash layout** — 4 MB, ota_0 at 0x10000, ota_1 at 0x187000
+2. **Partition table** — `larger.csv` (or your own) must match the bootloader's expectations
+3. **UART pins** — TX=GPIO1, RX=GPIO3 for console; use a proper USB-serial adapter
+4. **Boot pins** — IO0=GPIO0 (bootloader), EN=GPIO16 (reset)
+5. **Wi-Fi** — 2.4 GHz only, concurrent STA+AP supported
+6. **RAM** — ~156 KB DRAM, ~141 KB IRAM; budget for Wi-Fi buffers (~30 KB)
+7. **NVS** — use a project-specific namespace
+8. **JTAG** — GPIO12/13 for OpenOCD debug
+9. **Power** — 3.3 V, peak ~300 mA during Wi-Fi TX; use a USB supply for dev
+10. **MAC** — STA=`...9c`, AP=`...9d` (factory, don't override unless needed)
